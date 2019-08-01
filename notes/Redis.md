@@ -23,9 +23,9 @@
 
 
     单线程为什么还能这么快？
-    第一：纯内存访问，redis将所有数据存在内存中，内存的响应时长大约为100纳秒，这是redis达到每秒万级别访问的重要基础；
-    第二：非阻塞I/O，redis使用epoll作为I/O多路复用技术的实现，再加上redis自身的事件处理模型将epoll中的连接、读写、关闭都转为事件，不在网络I/O浪费过多时间。
-    第三：单线程避免了线程切换和竞态产生的消耗。
+    1. 纯内存访问，redis将所有数据存在内存中，内存的响应时长大约为100纳秒，这是redis达到每秒万级别访问的重要基础；
+    2. 非阻塞I/O，redis使用epoll作为I/O多路复用技术的实现，再加上redis自身的事件处理模型将epoll中的连接、读写、关闭都转为事件，不在网络I/O浪费过多时间。
+    3. 单线程避免了线程切换和竞态产生的消耗。
 
         
 ### 二、数据结构
@@ -77,14 +77,82 @@
     ```
     - 使用泛型T，不直接使用int，是为了对内存做极致的优化，适当的时候也可用byte、short.
     - Redis 的字符串有三种存储方式，在长度特别短时，使用 emb 形式存储 (embeded)，当长度超过 44 时，使用 raw 形式存储。
-        1. int：8个字节的长整型
+        1. **int**：8个字节的长整型
             ```html
             > set key 8653
             OK
             > object encoding key
             "int"
             ``` 
-        2. embstr：小于等于39个字节的字符串
-        3. raw：大于等于39个字节的字符串
+        2. **embstr**：小于等于39个字节的字符串
+        3. **raw**：大于等于39个字节的字符串
     - 扩容策略：字符串在长度小于 1M 之前，扩容空间采用**加倍**策略，也就是保留 100% 的冗余空间。当长度超过 1M 之后，为了避免加倍后的冗余空间过大而导致浪费，每次扩容只
            会多分配 1M 大小的冗余空间。
+
+    - **使用场景：**
+        1. 缓存功能
+        2. 计数
+        3. 共享session
+        4. 限速 [ SET KEY VALUE EX 60 NX ]
+
+2. 列表 list：相当于 Java 语言里面的 LinkedList，注意它是**链表**而不是数组。
+    - 这意味着 list 的插入和删除操作非常快，时间复杂度为 O(1)，但是索引定位很慢，时间复杂度为 O(n)，这点让人非常意外。
+    - list 常用来做**异步队列**使用。将需要延后处理的任务结构体序列化成字符串塞进 Redis 的列表，另一个线程从这个列表中轮询数据进行处理
+    - 早期版本存储 list 列表数据结构使用的是**压缩列表 ziplist** 和普通的**双向链表 linkedlist**，也就是元素少时用 ziplist，元素多时用 linkedlist。
+    
+    ```html
+     // 链表的节点
+     struct e listNode<T> {
+     listNode* prev;
+     listNode* next;
+     T value;
+     }
+     // 链表
+     struct list {
+     listNode *head;
+     listNode *tail;
+     long length;
+     }
+    ```
+    - 考虑到链表的附加空间相对太高，prev 和 next 指针就要占去 16 个字节 (64bit 系统的指针是 8 个字节)，另外每个节点的内存都是单独分配，会加剧内存的碎片
+      化，影响内存管理效率。后续版本对列表数据结构进行了改造，使用 **quicklist** 代替了 ziplist 和 linkedlist。
+    - redis 3.2 版本提供了 quicklist 内部编码， 简单说是以一个 ziplist 为节点的 linklist， 结合了两者的优势。
+    - quicklist 内部默认单个 ziplist 长度为 8k 字节，超出了这个字节数，就会新起一个 ziplist
+    
+    ```html
+    struct ziplist {
+    ...
+    }
+    struct ziplist_compressed {
+    int32 size;
+    byte[] compressed_data;
+    }
+    struct quicklistNode {
+    quicklistNode* prev;
+    quicklistNode* next;
+    ziplist* zl; // 指向压缩列表
+    int32 size; // ziplist 的字节总数
+    int16 count; // ziplist 中的元素数量
+    int2 encoding; // 存储形式 2bit，原生字节数组还是 LZF 压缩存储
+    ...
+    }
+    struct quicklist {
+    quicklistNode* head;
+    quicklistNode* tail;
+    long count; // 元素总数
+    int nodes; // ziplist 节点的个数
+    int compressDepth; // LZF 算法压缩深度
+    ...
+    }
+    ```
+    - 压缩深度：quicklist默认压缩深度为0（不压缩）
+    - 为了支持快速的 push/pop 操作，quicklist 的首尾两个 ziplist 不压缩，此时深度就是 1。如果深度为 2，就表示 quicklist 的首尾第一个 ziplist 以及首尾第二个 ziplist 都不压缩
+    
+    - Redis 5.0 又引入了一个新的数据结构 listpack，它是对 ziplist 结构的改进，在存储空间上会更加节省，而且结构上也比 ziplist 要精简。它的整体形式和
+      ziplist 还是比较接近的，如果你认真阅读了 ziplist 的内部结构分析，那么 listpack 也是比较容易理解的。
+      
+    - **使用场景：**
+        1. 标签
+        2. 生成随机数，比如抽奖
+        3. 社交需求
+ 
