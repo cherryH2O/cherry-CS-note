@@ -180,3 +180,26 @@
     - 它的 prevlen 字段表示前一个 entry 的字节长度，当压缩列表倒着遍历时，需要通过这个字段来快速定位到下一个元素的位置。它是一个变长的整数，当字符串长
       度小于 254(0xFE) 时，使用一个字节表示；如果达到或超出 254(0xFE) 那就使用 5 个字节来表示。第一个字节是 0xFE(254)，剩余四个字节表示字符串长度。你可
       能会觉得用 5 个字节来表示字符串长度，是不是太浪费了。我们可以算一下，当字符串长度比较长的时候，其实 5 个字节也只占用了不到 (5/(254+5))<2% 的空间。
+      
+    - 当哈希类型无法满足ziplist条件时，redis会使用**hashtable**作为哈希的内部实现，因为此时ziplist的读写效率会下降，而**hashtable的读写时间复杂度为O(1)**.
+    - dict 结构内部包含两个hashtable，通常情况下只有一个hashtable是有值的。但是在dict扩容缩容时，需要分配新的hashtable，然后进行渐进式搬迁，这时候两个hashtable存储的分别时旧的hashtable和新的hashtable。
+    - 待搬迁结束后，旧的hashtable被删除，新的hashtable取而代之。
+    
+    ```html
+    struct dictEntry {
+    d void* key;
+    d void* val;
+    dictEntry* next; // 链接下一个 entry
+    }
+    struct dictht {
+    dictEntry** table; // 二维
+    long size; // 第一维数组的长度
+    long used; // hash 表中的元素个数
+    ...
+    }
+    ```
+    - 字典数据结构的精华就落在了hashtable结构上了。hashtable的结构和Java 的 HashMap几乎时一样的，都是通过分桶的方式解决hash冲突。第一维时数组，第二维时链表。数组中存储的是第二维链表的第一个元素的指针。
+    - **渐进式rehash**:
+        1. 大字典的扩容是比较耗时的，需要重新申请新的数组，然后将旧字典所有链表中的元素重新挂接到新的数组下面，这是一个O(n)级别的操作。
+        2. 作为单线程的redis表示很难承受这样耗时的过程。redis 使用渐进式rehash小步搬迁，虽然慢一点，但是肯定可以搬完的。
+        3. redis 会在定时任务中对字典进行主动搬迁。
