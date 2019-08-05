@@ -1,3 +1,14 @@
+<!-- GFM-TOC -->
+* [一、初识redis](###一、初识redis)
+    * [redis特性](-redis特性)
+* [二、数据类型](###二数据结构)
+    * [STRING](####string)
+    * [LIST](####list)
+    * [HASH](####hash)
+
+<!-- GFM-TOC -->
+
+
 ### 一、初识redis
 
 - redis特性
@@ -66,6 +77,8 @@
 
 > [What Redis dadta structures look like](https://redislabs.com/ebook/part-1-getting-started/chapter-1-getting-to-know-redis/1-2-what-redis-data-structures-look-like/)
 
+#### STRING
+
 1. 字符串 string: Redis 的字符串叫着「SDS」，也就是 Simple Dynamic String 。它的结构是一个带长度信息的字节数组，最大不能超过512M。
     ```html
     struct SDS<T> {
@@ -94,6 +107,8 @@
         2. 计数
         3. 共享session
         4. 限速 [ SET KEY VALUE EX 60 NX ]
+
+#### LIST
 
 2. 列表 list：相当于 Java 语言里面的 LinkedList，注意它是**链表**而不是数组。
     - 这意味着 list 的插入和删除操作非常快，时间复杂度为 O(1)，但是索引定位很慢，时间复杂度为 O(n)，这点让人非常意外。
@@ -156,6 +171,7 @@
         2. 生成随机数，比如抽奖
         3. 社交需求
  
+#### HASH
 3. 哈希 hash：相当于 Java 里的 HashMap 无序字典。
     - 为了节约内存空间使用，zset 和 hash 容器对象在元素个数较**少**的时候，采用**压缩列表 (ziplist)** 进行存储。
     - **压缩列表是一块连续的内存空间，元素之间紧挨着存储，没有任何冗余空隙。**
