@@ -1,19 +1,20 @@
 <!-- GFM-TOC -->
-* [一、初识redis](#一、初识redis)
+* [一、初识redis](#一初识redis)
     * [redis特性](#redis特性)
-* [二、数据结构](#二、数据结构)
+* [二、数据结构](#二数据结构)
     * [STRING](#STRING)
     * [LIST](#LIST)
     * [HASH](#HASH)
     * [SET](#SET)
     * [ZSET](#ZSET)
-* [三、典型使用场景](#三、典型使用场景)
+* [三、典型使用场景](#三典型使用场景)
     * [Bitmaps(位图)](#Bitmaps(位图))
     * [HyperLogLog](#HyperLogLog)
     * [分布式锁](#分布式锁)
     * [延时队列](#延时队列)
     * [Bloom-Filter布隆过滤器](#bloom-filter布隆过滤器)
-* [四、事务](#四、事务)
+    * [发布订阅](#发布订阅)
+* [四、事务](#四事务)
 <!-- GFM-TOC -->
 
 ### 一、初识redis
@@ -304,7 +305,34 @@
     > redis-cli # 连接容器中的 redis 服务
     ```
 4. **bf.add/bf.exists/bf.madd/bf.mexists**
-
+#### 发布订阅
+1. redis提供了基于“发布/订阅”模式的消息机制，消息发布者和订阅者不进行直接通信。
+2. 发布者客户端向指定的频道（channel）发布消息，订阅该频道的每个客户端都可以收到该消息，
+3. redis 主要提供了：
+    1. 发布消息:  ```publish channel message
+                  ```
+          ```html
+          > publish channel:sports "Tim won the championship"
+          ```
+          向 channel:sports 频道发布一条信息 “Tim won the championship”，返回结果为订阅者个数，因为此时没有订阅者，所以返回0。
+    2. 订阅消息：```subscribe/psubscribe channel [channel ...]
+                 ```
+          ```html
+          > subscribe channel:sports           
+          > publish channel:sports "James lost the championship"
+          ```
+          以上分别在两个客户端操作，订阅者客户端就可以收到 "James lost the championship"
+    3. 和专业的消息队列系统相比，reids 发布订阅略显粗糙，例如**无法实现消息堆积和回溯**（不会对发布的消息持久化），但胜在够简单，如果当前场景可以容忍这些缺点，不失为一个不错的选择。
+    4. 取消订阅：```unsubscribe/punsubscribe channel [channel ...] 
+                 ```
+    5. 查询订阅：
+        1. 查看活跃的频道：```pubsub channels [pattern]
+                         ```  
+        2. 查看频道订阅数：```pubsub numsub [channel ...] 
+                         ```
+        3. 查看模式订阅数：```pubsub numpat
+                         ```
+                         
 ### 四、事务
     
    - 一个事务包含了多个命令，服务器在执行事务期间，不会改去执行其它客户端的命令请求。  
