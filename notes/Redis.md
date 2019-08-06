@@ -12,7 +12,7 @@
     * [HyperLogLog](#HyperLogLog)
     * [分布式锁](#分布式锁)
     * [延时队列](#延时队列)
-    * [布隆过滤器](#bloom-filter布隆过滤器)
+    * [Bloom-Filter布隆过滤器](#bloom-filter布隆过滤器)
 * [四、事务](#四、事务)
 <!-- GFM-TOC -->
 
